@@ -171,7 +171,7 @@ function refactor(ast) {
                 ];
             }
             
-            if (node.test.type === "LogicalExpression" && node.test.right.type === "SequenceExpression") {
+            if (node.test.type === "LogicalExpression" && node.test.right.type === "SequenceExpression"&&!node.alternate) {
                 const rightExpressions = node.test.right.expressions;
                 const lastRightExpression = rightExpressions.pop();
 
@@ -183,7 +183,7 @@ function refactor(ast) {
                     return processNode(exprStatement);
                 });
 
-                const newIfStatement = {
+                const newIfStatement = processNode({
                     type: "IfStatement",
                     test: node.test.left,
                     consequent: {
@@ -199,7 +199,7 @@ function refactor(ast) {
                         ].flatMap(node => processNode(node)),
                     },
                     alternate: node.alternate,
-                };
+                })[0];
 
                 newNodes[newNodes.length - 1] = newIfStatement;
             }
