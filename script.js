@@ -79,7 +79,7 @@ function refactor(ast) {
                             type: "ExpressionStatement",
                             expression: {
                                 type: "AssignmentExpression",
-                                operator: "=",
+                                operator: node.expression.operator,
                                 left: left,
                                 right: consequent,
                             },
@@ -91,7 +91,7 @@ function refactor(ast) {
                             type: "ExpressionStatement",
                             expression: {
                                 type: "AssignmentExpression",
-                                operator: "=",
+                                operator: node.expression.operator,
                                 left: left,
                                 right: alternate,
                             },
