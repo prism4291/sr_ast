@@ -5,56 +5,62 @@ function refactor(ast) {
         if (!node) return null;
         let newNodes = null;
         
-        // 複数の式を個別の文に分割し、processNodeを呼び出す
-        if (node.type === "ExpressionStatement" && node.expression.type === "SequenceExpression") {
-            newNodes = node.expression.expressions.flatMap(expr => {
-                const exprStatement = {
-                    type: "ExpressionStatement",
-                    expression: expr,
+        if(document.getElementById("sr_checkbox_comma").checked) {
+            // 複数の式を個別の文に分割し、processNodeを呼び出す
+            if (node.type === "ExpressionStatement" && node.expression.type === "SequenceExpression") {
+                newNodes = node.expression.expressions.flatMap(expr => {
+                    const exprStatement = {
+                        type: "ExpressionStatement",
+                        expression: expr,
+                    };
+                    return processNode(exprStatement); // 各式に対してprocessNodeを呼び出す
+                });
+            }
+        }
+
+        if(document.getElementById("sr_checkbox_var").checked) {
+            // 変数宣言の処理
+            if (node.type === "VariableDeclaration") {
+                newNodes = node.declarations.map(declaration => ({
+                    type: "VariableDeclaration",
+                    declarations: [declaration],
+                    kind: node.kind,
+                }));
+            }
+        }
+
+        if(document.getElementById("sr_checkbox_and").checked) {
+            // 条件 && (c) の処理
+            if (node.type === "ExpressionStatement" && node.expression.type === "LogicalExpression") {
+                const test = node.expression.left;
+                const consequent = {
+                    type: "BlockStatement",
+                    body: [{
+                        type: "ExpressionStatement",
+                        expression: node.expression.right,
+                    }],
                 };
-                return processNode(exprStatement); // 各式に対してprocessNodeを呼び出す
-            });
-        }
 
-        // 変数宣言の処理
-        if (node.type === "VariableDeclaration") {
-            newNodes = node.declarations.map(declaration => ({
-                type: "VariableDeclaration",
-                declarations: [declaration],
-                kind: node.kind,
-            }));
-        }
-
-        // 条件 && (c) の処理
-        if (node.type === "ExpressionStatement" && node.expression.type === "LogicalExpression") {
-            const test = node.expression.left;
-            const consequent = {
-                type: "BlockStatement",
-                body: [{
-                    type: "ExpressionStatement",
-                    expression: node.expression.right,
-                }],
-            };
-
-            if (node.expression.operator === "&&") {
-                newNodes = processNode({
-                    type: "IfStatement",
-                    test: test,
-                    consequent: consequent,
-                    alternate: null,
-                });
-            } else if (node.expression.operator === "||") {
-                newNodes = processNode({
-                    type: "IfStatement",
-                    test: {
-                        type: "UnaryExpression",
-                        operator: "!",
-                        argument: test,
-                        prefix: true,
-                    },
-                    consequent: consequent,
-                    alternate: null,
-                });
+                if (node.expression.operator === "&&") {
+                    newNodes = processNode({
+                        type: "IfStatement",
+                        test: test,
+                        consequent: consequent,
+                        alternate: null,
+                    });
+                } else if (node.expression.operator === "||") {
+                    newNodes = processNode({
+                        type: "IfStatement",
+                        test: {
+                            type: "UnaryExpression",
+                            operator: "!",
+                            argument: test,
+                            prefix: true,
+                        },
+                        consequent: consequent,
+                        alternate: null,
+                    });
+                }
             }
         }
 
@@ -68,61 +74,117 @@ function refactor(ast) {
             if (node.expression.right.type === "FunctionExpression") {
                 node.expression.right.body = processNode(node.expression.right.body)[0];
             }else if(node.expression.right.type === "ConditionalExpression"){
-                const { left, right } = node.expression;
-                const { test, consequent, alternate } = right;
-                newNodes = processNode({
+                if(document.getElementById("sr_checkbox_three_var").checked) {
+                    const { left, right } = node.expression;
+                    const { test, consequent, alternate } = right;
+                    newNodes = processNode({
+                        type: "IfStatement",
+                        test: test,
+                        consequent: {
+                            type: "BlockStatement",
+                            body: [{
+                                type: "ExpressionStatement",
+                                expression: {
+                                    type: "AssignmentExpression",
+                                    operator: node.expression.operator,
+                                    left: left,
+                                    right: consequent,
+                                },
+                            }],
+                        },
+                        alternate: {
+                            type: "BlockStatement",
+                            body: [{
+                                type: "ExpressionStatement",
+                                expression: {
+                                    type: "AssignmentExpression",
+                                    operator: node.expression.operator,
+                                    left: left,
+                                    right: alternate,
+                                },
+                            }],
+                        },
+                    });
+                }
+            }
+        }
+        if(document.getElementById("sr_checkbox_three").checked) {
+            // 三項演算子の処理
+            if (node.type === "ExpressionStatement" && node.expression.type === "ConditionalExpression") {
+                const { test, consequent, alternate } = node.expression;
+
+                newNodes=processNode( {
                     type: "IfStatement",
                     test: test,
                     consequent: {
                         type: "BlockStatement",
                         body: [{
                             type: "ExpressionStatement",
-                            expression: {
-                                type: "AssignmentExpression",
-                                operator: node.expression.operator,
-                                left: left,
-                                right: consequent,
-                            },
+                            expression: consequent,
                         }],
                     },
                     alternate: {
                         type: "BlockStatement",
                         body: [{
                             type: "ExpressionStatement",
-                            expression: {
-                                type: "AssignmentExpression",
-                                operator: node.expression.operator,
-                                left: left,
-                                right: alternate,
-                            },
+                            expression: alternate,
                         }],
                     },
                 });
             }
         }
 
-        // 三項演算子の処理
-        if (node.type === "ExpressionStatement" && node.expression.type === "ConditionalExpression") {
-            const { test, consequent, alternate } = node.expression;
+        // カンマ式の処理
+        if (node.type === "ReturnStatement" && node.argument) {
+            newNodes = [node];
+            if(document.getElementById("sr_checkbox_comma_return").checked) {
+                if(node.argument.type === "SequenceExpression"){
+                    const expressions = node.argument.expressions;
+                    const lastExpression = expressions.pop();
 
-            newNodes=processNode( {
-                type: "IfStatement",
-                test: test,
-                consequent: {
-                    type: "BlockStatement",
-                    body: [{
-                        type: "ExpressionStatement",
-                        expression: consequent,
-                    }],
-                },
-                alternate: {
-                    type: "BlockStatement",
-                    body: [{
-                        type: "ExpressionStatement",
-                        expression: alternate,
-                    }],
-                },
-            });
+                    const statements = expressions.flatMap(expr => {
+                        const exprStatement = {
+                            type: "ExpressionStatement",
+                            expression: expr,
+                        };
+                        return processNode(exprStatement);
+                    });
+
+                    newNodes = [
+                        ...statements,
+                        {
+                            type: "ReturnStatement",
+                            argument: lastExpression,
+                        },
+                    ];
+                }
+            }
+            if(document.getElementById("sr_checkbox_three_return").checked) {
+                // ReturnStatementの三項演算子の処理
+                if (newNodes[newNodes.length -1].argument.type === "ConditionalExpression") {
+                    const { test, consequent, alternate } = newNodes[newNodes.length -1].argument;
+
+                    newNodes[newNodes.length -1] = 
+                        processNode({
+                            type: "IfStatement",
+                            test: test,
+                            consequent: {
+                                type: "BlockStatement",
+                                body: [{
+                                    type: "ReturnStatement",
+                                    argument: consequent,
+                                }],
+                            },
+                            alternate: {
+                                type: "BlockStatement",
+                                body: [{
+                                    type: "ReturnStatement",
+                                    argument: alternate,
+                                }],
+                            },
+                        })[0];
+                }
+            }
         }
         
         // if文の処理
@@ -150,58 +212,61 @@ function refactor(ast) {
             }
             
             newNodes = [node];
-            // 条件がSequenceExpressionの場合
-            if (node.test.type === "SequenceExpression") {
-                const expressions = node.test.expressions;
-                const lastExpression = expressions.pop();
+            if(document.getElementById("sr_checkbox_comma_if").checked) {
+                // 条件がSequenceExpressionの場合
+                if (node.test.type === "SequenceExpression") {
+                    const expressions = node.test.expressions;
+                    const lastExpression = expressions.pop();
 
-                const statements = expressions.flatMap(expr => {
-                    const exprStatement = {
-                        type: "ExpressionStatement",
-                        expression: expr,
-                    };
-                    return processNode(exprStatement);
-                });
+                    const statements = expressions.flatMap(expr => {
+                        const exprStatement = {
+                            type: "ExpressionStatement",
+                            expression: expr,
+                        };
+                        return processNode(exprStatement);
+                    });
 
-                node.test = lastExpression;
+                    node.test = lastExpression;
 
-                newNodes = [
-                    ...statements,
-                    node,
-                ];
+                    newNodes = [
+                        ...statements,
+                        node,
+                    ];
+                }
             }
-            
-            if (node.test.type === "LogicalExpression" && node.test.right.type === "SequenceExpression"&&!node.alternate) {
-                const rightExpressions = node.test.right.expressions;
-                const lastRightExpression = rightExpressions.pop();
+            if(document.getElementById("sr_checkbox_comma_if_v2").checked) {
+                if (node.test.type === "LogicalExpression" && node.test.right.type === "SequenceExpression"&&!node.alternate) {
+                    const rightExpressions = node.test.right.expressions;
+                    const lastRightExpression = rightExpressions.pop();
 
-                const rightStatements = rightExpressions.flatMap(expr => {
-                    const exprStatement = {
-                        type: "ExpressionStatement",
-                        expression: expr,
-                    };
-                    return processNode(exprStatement);
-                });
+                    const rightStatements = rightExpressions.flatMap(expr => {
+                        const exprStatement = {
+                            type: "ExpressionStatement",
+                            expression: expr,
+                        };
+                        return processNode(exprStatement);
+                    });
 
-                const newIfStatement = processNode({
-                    type: "IfStatement",
-                    test: node.test.left,
-                    consequent: {
-                        type: "BlockStatement",
-                        body: [
-                            ...rightStatements,
-                            {
-                                type: "IfStatement",
-                                test: lastRightExpression,
-                                consequent: node.consequent,
-                                alternate: node.alternate,
-                            },
-                        ].flatMap(node => processNode(node)),
-                    },
-                    alternate: node.alternate,
-                })[0];
+                    const newIfStatement = processNode({
+                        type: "IfStatement",
+                        test: node.test.left,
+                        consequent: {
+                            type: "BlockStatement",
+                            body: [
+                                ...rightStatements,
+                                {
+                                    type: "IfStatement",
+                                    test: lastRightExpression,
+                                    consequent: node.consequent,
+                                    alternate: node.alternate,
+                                },
+                            ].flatMap(node => processNode(node)),
+                        },
+                        alternate: node.alternate,
+                    })[0];
 
-                newNodes[newNodes.length - 1] = newIfStatement;
+                    newNodes[newNodes.length - 1] = newIfStatement;
+                }
             }
         }
 
@@ -214,27 +279,28 @@ function refactor(ast) {
                 };
             }
             node.body= processNode(node.body)[0];
-            // 条件がSequenceExpressionの場合
-            if (node.init && node.init.type === "SequenceExpression") {
-                const expressions = node.init.expressions;
-                const lastExpression = expressions.pop();
-        
-                const statements = expressions.flatMap(expr => {
-                    const exprStatement = {
-                        type: "ExpressionStatement",
-                        expression: expr,
-                    };
-                    return processNode(exprStatement);
-                });
-        
-                node.init = lastExpression;
-        
-                newNodes = [
-                    ...statements,
-                    node,
-                ];
-            }
+            if(document.getElementById("sr_checkbox_comma_for").checked) {
+                // 条件がSequenceExpressionの場合
+                if (node.init && node.init.type === "SequenceExpression") {
+                    const expressions = node.init.expressions;
+                    const lastExpression = expressions.pop();
             
+                    const statements = expressions.flatMap(expr => {
+                        const exprStatement = {
+                            type: "ExpressionStatement",
+                            expression: expr,
+                        };
+                        return processNode(exprStatement);
+                    });
+            
+                    node.init = lastExpression;
+            
+                    newNodes = [
+                        ...statements,
+                        node,
+                    ];
+                }
+            }
 
         }
             
@@ -293,18 +359,20 @@ function format(code) {
         indent: '    ', // インデントの設定
         newline: '\n'    // 改行の設定
     })
-    let lines=formattedCode.split("\n")
-    for(let i=0;i<lines.length;i++) {
-        if(lines[i].includes("], [")) {
-            let match = lines[i].match(/\[(\[+)/);
-            if (match) {
-                let leftBracketIndex = match.index + match[0].length-1;
-                let spaces = ' '.repeat(leftBracketIndex);
-                lines[i]=lines[i].replaceAll("], [", "],\n" + spaces + "[").replaceAll("  [["," [[");
+    if(document.getElementById("sr_checkbox_array").checked) {
+        let lines=formattedCode.split("\n")
+        for(let i=0;i<lines.length;i++) {
+            if(lines[i].includes("], [")) {
+                let match = lines[i].match(/\[(\[+)/);
+                if (match) {
+                    let leftBracketIndex = match.index + match[0].length-1;
+                    let spaces = ' '.repeat(leftBracketIndex);
+                    lines[i]=lines[i].replaceAll("], [", "],\n" + spaces + "[").replaceAll("  [["," [[");
+                }
             }
         }
+        formattedCode=lines.join("\n")
     }
-    formattedCode=lines.join("\n")
     //return formattedCode
     return formattedCode+"\n"//+JSON.stringify(formatted, null, 2)
 }
