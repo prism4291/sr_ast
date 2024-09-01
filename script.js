@@ -268,6 +268,23 @@ function refactor(ast) {
                     newNodes[newNodes.length - 1] = newIfStatement;
                 }
             }
+            if(document.getElementById("sr_checkbox_if_else").checked) {
+                if (newNodes[newNodes.length -1].alternate && newNodes[newNodes.length -1].alternate.type === "BlockStatement") {
+                    if (newNodes[newNodes.length -1].consequent.type === "BlockStatement" && newNodes[newNodes.length -1].consequent.body.length === 1&&newNodes[newNodes.length -1].consequent.body[0].type === "IfStatement") {
+                        newNodes[newNodes.length -1] = {
+                            type: "IfStatement",
+                            test: {
+                                type: "UnaryExpression",
+                                operator: "!",
+                                argument: newNodes[newNodes.length -1].test,
+                                prefix: true,
+                            },
+                            consequent: newNodes[newNodes.length -1].alternate,
+                            alternate: newNodes[newNodes.length -1].consequent.body[0],
+                        };
+                    }
+                }
+            }
         }
 
         // for文の処理
